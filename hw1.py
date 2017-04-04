@@ -67,30 +67,12 @@ def race_result(url):
 	final = dom.by_class('final')[0]
 	final = web.Element(final)
 	td = final.by_tag('td')
-	total = float(td[3].content + td[4].content) / 100
-	result[gov_names[0]] = td[3].content
-	result[gov_names[1]] = td[4].content
+	total = float(td[3].content) + float(td[4].content)
+	i = 0
+	for x in gov_names:
+		result[str(x)] = float(td[3 + i].content) / total
+		i += 1
 	return result
-
-def race_result2(url):
-	
-	dom = web.Element(requests.get(url).text)
-	
-	table = dom.by_tag('div#polling-data-rcp')[0]
-	result_data = table.by_tag('tr.final')[0]
-	td = result_data.by_tag('td')
-
-	results = [float(t.content) for t in td[3:-1]]
-	tot = sum(results) / 100
-	
-	#get table headers
-	headers = table.by_tag('th')
-	labels = [str(t.content).split('(')[0].strip() for t in headers[3:-1]]
-	print("labels", labels)
-	print("results", results)
-	for l, r in zip(labels, results):
-		print(l, r / tot)
-	return {l:r / tot for l, r in zip(labels, results)}
 
 def id_from_url(url):
 	"""Given a URL, look up the RCP identifier number"""
@@ -113,7 +95,7 @@ def plot_race(url):
 
 # find_governor_races("http://www.realclearpolitics.com/epolls/2010/governor/2010_elections_governor_map.html")
 print(race_result("http://www.realclearpolitics.com/epolls/2010/governor/ca/california_governor_whitman_vs_brown-1113.html"))
-print(race_result2("http://www.realclearpolitics.com/epolls/2010/governor/ca/california_governor_whitman_vs_brown-1113.html"))
+# print(race_result2("http://www.realclearpolitics.com/epolls/2010/governor/ca/california_governor_whitman_vs_brown-1113.html"))
 # page = requests.get('http://www.realclearpolitics.com/epolls/2010/governor/2010_elections_governor_map.html').text.encode('ascii', 'ignore')
 
 # for race in find_governor_races(page):
