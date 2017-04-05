@@ -18,6 +18,87 @@ from pattern import web
 
 from matplotlib import rcParams
 
+import re
+
+def _strip(s):
+    """This function removes non-letter characters from a word
+    
+    for example _strip('Hi there!') == 'Hi there'
+    """
+    return re.sub(r'[\W_]+', '', s)
+
+def plot_colors(xml):
+    """
+    Given an XML document like the link above, returns a python dictionary
+    that maps a graph title to a graph color.
+    
+    Both the title and color are parsed from attributes of the <graph> tag:
+    <graph title="the title", color="#ff0000"> -> {'the title': '#ff0000'}
+    
+    These colors are in "hex string" format. This page explains them:
+    http://coding.smashingmagazine.com/2012/10/04/the-code-side-of-color/
+    
+    Example
+    -------
+    >>> plot_colors(get_poll_xml(1044))
+    {u'Approve': u'#000000', u'Disapprove': u'#FF0000'}
+    """
+    dom = web.Element(xml)
+    result = {}
+    for graph in dom.by_tag('graph'):
+        title = _strip(graph.attributes['title'])
+        result[title] = graph.attributes['color']
+    return result
+#these colors come from colorbrewer2.org. Each is an RGB triplet
+dark2_colors = [(0.10588235294117647, 0.6196078431372549, 0.4666666666666667),
+                (0.8509803921568627, 0.37254901960784315, 0.00784313725490196),
+                (0.4588235294117647, 0.4392156862745098, 0.7019607843137254),
+                (0.9058823529411765, 0.1607843137254902, 0.5411764705882353),
+                (0.4, 0.6509803921568628, 0.11764705882352941),
+                (0.9019607843137255, 0.6705882352941176, 0.00784313725490196),
+                (0.6509803921568628, 0.4627450980392157, 0.11372549019607843),
+                (0.4, 0.4, 0.4)]
+
+rcParams['figure.figsize'] = (10, 6)
+rcParams['figure.dpi'] = 150
+rcParams['axes.color_cycle'] = dark2_colors
+rcParams['lines.linewidth'] = 2
+rcParams['axes.grid'] = True
+rcParams['axes.facecolor'] = '#eeeeee'
+rcParams['font.size'] = 14
+rcParams['patch.edgecolor'] = 'none'
+
+def poll_plot(poll_id):
+    """
+    Make a plot of an RCP Poll over time
+    
+    Parameters
+    ----------
+    poll_id : int
+        An RCP poll identifier
+    """
+
+    # hey, you wrote two of these functions. Thanks for that!
+    xml = get_poll_xml(poll_id)
+    data = rcp_poll_data(xml)
+    colors = plot_colors(xml)
+
+    #remove characters like apostrophes
+    data = data.rename(columns = {c: _strip(c) for c in data.columns})
+
+    #normalize poll numbers so they add to 100%    
+    norm = data[colors.keys()].sum(axis=1) / 100    
+    for c in colors.keys():
+        data[c] /= norm
+    
+    for label, color in colors.items():
+        plt.plot(data.date, data[label], color=color, label=label)        
+        
+    plt.xticks(rotation=70)
+    plt.legend(loc='best')
+    plt.xlabel("Date")
+    plt.ylabel("Normalized Poll Percentage")
+
 def get_poll_xml(poll_id):
 	return requests.get("http://charts.realclearpolitics.com/charts/" + str(poll_id) +".xml").text
 
@@ -42,35 +123,31 @@ def rcp_poll_data(xml):
 	return result
 
 def find_governor_races(html):
-	page = requests.get(html).text
-	dom = web.Element(page)
+	dom = web.Element(html)
 	result = []
 
-	regex = fnmatch.translate('*http://www.realclearpolitics.com/epolls/*')
 	for ahref in dom.by_tag('a'):
 		name = ahref.attributes.get('href', '')
-		if fnmatch.fnmatch(name, 'http://www.realclearpolitics.com/epolls/[0-9][0-9][0-9][0-9]/governor/[a-zA-Z][a-zA-Z]/*[0-9][0-9][0-9][0-9].html'):
+		if fnmatch.fnmatch(name, 'http://www.realclearpolitics.com/epolls/????/governor/??/*-*.html'):
 			result.append(name)
 	return result
 
 def race_result(url):
 	dom = web.Element(requests.get(url).text)
 	result = {}
+	total = 0
 
 	gov_names = []
 	election_results = []
-	names = dom.by_class('candidate layout0')
-	for n in names:
-		alt = web.Element(n)
-		alt = alt.by_tag('img')
-		gov_names.append(alt[0].attributes['alt'].split()[1])
-	final = dom.by_class('final')[0]
-	final = web.Element(final)
-	td = final.by_tag('td')
-	total = float(td[3].content) + float(td[4].content)
+	th = dom.by_class('data')[0].by_tag('th')
+	for n in range(3, len(th) - 1):
+		gov_names.append(th[n].content.split()[0])
+	td = dom.by_class('final')[0].by_tag('td')
+	for r in range(3, len(td) - 1):
+		total += float(td[r].content)
 	i = 0
 	for x in gov_names:
-		result[str(x)] = float(td[3 + i].content) / total
+		result[str(x)] = float(td[3 + i].content) / total * 100 #Do not forget to normalize
 		i += 1
 	return result
 
@@ -89,14 +166,18 @@ def plot_race(url):
 	
 	#really, you shouldn't have
 	result = race_result(url)
-	# print(result)	
-	for r in result:
-		plt.axhline(result[r], color=colors[_strip(r)], alpha=0.6, ls='--')
+	print(result)
+	# for r in result:
+	# 	plt.axhline(result[r], color=colors[_strip(r)], alpha=0.6, ls='--')
 
-# find_governor_races("http://www.realclearpolitics.com/epolls/2010/governor/2010_elections_governor_map.html")
-print(race_result("http://www.realclearpolitics.com/epolls/2010/governor/ca/california_governor_whitman_vs_brown-1113.html"))
-# print(race_result2("http://www.realclearpolitics.com/epolls/2010/governor/ca/california_governor_whitman_vs_brown-1113.html"))
-# page = requests.get('http://www.realclearpolitics.com/epolls/2010/governor/2010_elections_governor_map.html').text.encode('ascii', 'ignore')
+def all_error_data():
+	page = requests.get('http://www.realclearpolitics.com/epolls/2010/governor/2010_elections_governor_map.html').text.encode('ascii', 'ignore')
+	frames = []
+	for err in find_governor_races(page):
+		frames.append(error_data(err))
+		df = pd.concat(frames, ignore_index=True)
+		return df
 
-# for race in find_governor_races(page):
-# 	plot_race(race)
+poll_plot(1044)
+plt.title("Obama Job Approval")
+plt.show()
