@@ -128,8 +128,12 @@ def find_governor_races(html):
 
 	for ahref in dom.by_tag('a'):
 		name = ahref.attributes.get('href', '')
-		if fnmatch.fnmatch(name, 'http://www.realclearpolitics.com/epolls/????/governor/??/*-*.html'):
+		reg1 = 'http://www.realclearpolitics.com/epolls/????/governor/??/*-*.html'
+		reg2 = '/epolls/????/governor/??/*-*.html'
+		if fnmatch.fnmatch(name, reg1):
 			result.append(name)
+		elif fnmatch.fnmatch(name, reg2):
+			result.append("http://www.realclearpolitics.com" + name)
 	return result
 
 def race_result(url):
@@ -178,6 +182,7 @@ def all_error_data():
 		df = pd.concat(frames, ignore_index=True)
 		return df
 
-poll_plot(1044)
-plt.title("Obama Job Approval")
-plt.show()
+# poll_plot(1044)
+# plt.title("Obama Job Approval")
+# plt.show()
+
